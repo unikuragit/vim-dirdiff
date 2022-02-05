@@ -9,6 +9,7 @@ let g:loaded_dirdiff = 1
 
 " Public Interface:
 command! -nargs=* -complete=dir DirDiff call <SID>DirDiff (<f-args>)
+command! -nargs=* -complete=dir DirDiffNoRecursive call <SID>DirDiff (<f-args>, '--no-rec')
 command! -nargs=0 DirDiffOpen call <SID>DirDiffOpen ()
 command! -nargs=0 DirDiffNext call <SID>DirDiffNext ()
 command! -nargs=0 DirDiffPrev call <SID>DirDiffPrev ()
@@ -124,6 +125,11 @@ if !exists("g:DirDiffTextOnlyIn")
     let g:DirDiffTextOnlyIn = "Only in "
 endif
 
+" String used for the English equivalent "Common subdirectories ")
+if !exists("g:DirDiffTextSubDir")
+    let g:DirDiffTextSubDir = "Common subdirectories: "
+endif
+
 " String used for the English equivalent ": ")
 if !exists("g:DirDiffTextOnlyInCenter")
     let g:DirDiffTextOnlyInCenter = ": "
@@ -186,26 +192,47 @@ else
 endif
 
 
-function! <SID>DirDiff(srcA, srcB)
+function! <SID>DirDiff(srcA, srcB, ...)
+    let recursive = 1
+    let tabopen = 0
+    if a:0 > 0
+      for arg in a:000
+        if arg == '--no-rec'
+          let recursive = 0
+        elseif arg == '--tabnew'
+          let tabopen = 1
+        endif
+      endfor
+    endif
+
+    " TODO
+    if tabopen
+      tabnew
+    endif
+
     " Setup
     let DirDiffAbsSrcA = fnamemodify(expand(a:srcA, ":p"), ":p")
     let DirDiffAbsSrcB = fnamemodify(expand(a:srcB, ":p"), ":p")
     " Check for an internationalized version of diff ?
-    call <SID>GetDiffStrings()
+    call <SID>GetDiffStrings(recursive)
 
     " Remove the trailing \ or /
     let DirDiffAbsSrcA = substitute(DirDiffAbsSrcA, '\\$\|/$', '', '')
     let DirDiffAbsSrcB = substitute(DirDiffAbsSrcB, '\\$\|/$', '', '')
 
-    let s:FilenameDiffWindow = tempname()
+    let t:FilenameDiffWindow = tempname()
     " We first write to that file
     " Constructs the command line
     let langStr = ""
     let cmd = "!" . g:DirDiffLangString . "diff"
-    let cmdarg = " -r --brief"
+    let cmdarg = ''
+    if recursive
+      let cmdarg = cmdarg . " -r"
+    endif
+    let cmdarg = cmdarg . " --brief"
 
     if (g:DirDiffIgnoreFileNameCase)
-	let cmdarg = cmdarg." --ignore-file-name-case"
+      let cmdarg = cmdarg." --ignore-file-name-case"
     endif
 
     " If variable is set, we ignore the case
@@ -225,15 +252,20 @@ function! <SID>DirDiff(srcA, srcB)
 "    let addarg = input("Additional diff args (current =". cmdarg. "): ")
     let addarg = ""
     let cmd = cmd.cmdarg." ".addarg." \"".DirDiffAbsSrcA."\" \"".DirDiffAbsSrcB."\""
-    let cmd = cmd." > \"".s:FilenameDiffWindow."\""
+    let cmd = cmd." > \"".t:FilenameDiffWindow."\""
 
     echo "Diffing directories, it may take a while..."
     let error = <SID>DirDiffExec(cmd, 0)
     if (error == 0)
+        " TODO
+        if tabopen
+          tabclose
+        endif
         redraw | echom "diff found no differences - directories match."
+        call s:ChangeSameSubDir(line('.'))
         return
     endif
-    silent exe "edit ".s:FilenameDiffWindow
+    silent exe "edit ".t:FilenameDiffWindow
     echo "Defining [A] and [B] ... "
     " We then do a substitution on the directory path
     " We need to do substitution of the the LONGER string first, otherwise
@@ -343,10 +375,10 @@ function! <SID>DirDiffQuit()
         call <SID>SaveDiffWindowsIfModified()
         bd!
     endif
-    unlet! s:FilenameDiffWindow
-    unlet! s:FilenameA
-    unlet! s:FilenameB
-    unlet! s:LastMode
+    unlet! t:FilenameDiffWindow
+    unlet! t:FilenameA
+    unlet! t:FilenameB
+    unlet! t:LastMode
 endfun
 
 " Returns an escaped version of the path for regex uses
@@ -367,11 +399,11 @@ endfunction
 
 " Close the opened diff comparison windows if they exist
 function! <SID>SaveDiffWindowsIfModified()
-    if exists("s:FilenameA")
-        call <SID>AskToSaveFileIfModified(s:FilenameA)
+    if exists("t:FilenameA")
+        call <SID>AskToSaveFileIfModified(t:FilenameA)
     endif
-    if exists("s:FilenameA")
-        call <SID>AskToSaveFileIfModified(s:FilenameB)
+    if exists("t:FilenameB")
+        call <SID>AskToSaveFileIfModified(t:FilenameB)
     endif
 endfunction
 
@@ -460,7 +492,7 @@ function! <SID>Drop(fname)
 endfunction
 
 function! <SID>GotoDiffWindow()
-    call <SID>Drop(s:FilenameDiffWindow)
+    call <SID>Drop(t:FilenameDiffWindow)
 endfunction
 
 function! <SID>DirDiffOpen()
@@ -482,33 +514,33 @@ function! <SID>DirDiffOpen()
     let line = getline(".")
     let b:currentDiff = line(".")
 
-    let previousFileA = exists("s:FilenameA") ? s:FilenameA : ""
-    let previousFileB = exists("s:FilenameB") ? s:FilenameB : ""
+    let previousFileA = exists("t:FilenameA") ? t:FilenameA : ""
+    let previousFileB = exists("t:FilenameB") ? t:FilenameB : ""
 
     " Parse the line and see whether it's a "Only in" or "Files Differ"
     call <SID>HighlightLine()
     let fileA = <SID>GetFileNameFromLine("A", line)
     let fileB = <SID>GetFileNameFromLine("B", line)
-    let s:FilenameA = <SID>EscapeFileName(fileA)
-    let s:FilenameB = <SID>EscapeFileName(fileB)
+    let t:FilenameA = <SID>EscapeFileName(fileA)
+    let t:FilenameB = <SID>EscapeFileName(fileB)
 
     if <SID>IsOnly(line)
         " We open the file
         let fileSrc = <SID>ParseOnlySrc(line)
         if (fileSrc == "A")
-            let fileToOpen = s:FilenameA
+            let fileToOpen = t:FilenameA
         elseif (fileSrc == "B")
-            let fileToOpen = s:FilenameB
+            let fileToOpen = t:FilenameB
         endif
 
-        if exists("s:LastMode")
-            if s:LastMode == 2
+        if exists("t:LastMode")
+            if t:LastMode == 2
                 silent exec "bd ".bufnr(previousFileA)
 
                 call <SID>Drop(previousFileB)
                 silent exec "edit ".fileToOpen
             else
-                let previousFile = (s:LastMode == "A") ? previousFileA : previousFileB
+                let previousFile = (t:LastMode == "A") ? previousFileA : previousFileB
                 call <SID>Drop(previousFile)
                 silent exec "edit ".fileToOpen
                 silent exec "bd ".bufnr(previousFile)
@@ -523,36 +555,36 @@ function! <SID>DirDiffOpen()
         " Resize the window
         exe("resize " . g:DirDiffWindowSize)
         exe (b:currentDiff)
-        let s:LastMode = fileSrc
+        let t:LastMode = fileSrc
     elseif <SID>IsDiffer(line)
 
-        if exists("s:LastMode")
-            if s:LastMode == 2
+        if exists("t:LastMode")
+            if t:LastMode == 2
                 call <SID>Drop(previousFileA)
-                silent exec "edit ".s:FilenameA
+                silent exec "edit ".t:FilenameA
                 diffthis
                 silent exec "bd ".bufnr(previousFileA)
 
                 call <SID>Drop(previousFileB)
-                silent exec "edit ".s:FilenameB
+                silent exec "edit ".t:FilenameB
                 diffthis
                 silent exec "bd ".bufnr(previousFileB)
             else
-                let previousFile = (s:LastMode == "A") ? previousFileA : previousFileB
+                let previousFile = (t:LastMode == "A") ? previousFileA : previousFileB
                 call <SID>Drop(previousFile)
-                silent exec "edit ".s:FilenameB
+                silent exec "edit ".t:FilenameB
                 silent exec "bd ".bufnr(previousFile)
                 diffthis
 
                 " To ensure that A is on the left and B on the right, splitright must be off
-                silent exec "leftabove vert diffsplit ".s:FilenameA
+                silent exec "leftabove vert diffsplit ".t:FilenameA
             endif
         else
             "Open the diff windows
-            silent exec "split ".s:FilenameB
+            silent exec "split ".t:FilenameB
 
             " To ensure that A is on the left and B on the right, splitright must be off
-            silent exec "leftabove vert diffsplit ".s:FilenameA
+            silent exec "leftabove vert diffsplit ".t:FilenameA
         endif
 
         " Go back to the diff window
@@ -562,7 +594,22 @@ function! <SID>DirDiffOpen()
         exe (b:currentDiff)
         " Center the line
         exe ("normal z.")
-        let s:LastMode = 2
+        let t:LastMode = 2
+    elseif s:IsSubDir(line)
+        let common_dir = s:GetCommonSubdir(line)
+        if common_dir == ""
+            return
+        endif
+
+        let input = confirm("Compare to " . common_dir . " ?", "&Yes\n&No", 2)
+        if input != 1
+            return
+        endif
+
+        let dirA = s:GetBaseDir("A") . common_dir
+        let dirB = s:GetBaseDir("B") . common_dir
+        call s:DirDiff(dirA, dirB, '--no-rec', '--tabnew')
+        return
     else
         echo "There is no diff at the current line!"
     endif
@@ -636,6 +683,22 @@ function! <SID>GetBaseDir(diffName)
     let line = getline(baseLine)
     let rtn = substitute(line, regex , '\1', '')
     return rtn
+endfunction
+
+function! s:GetCommonSubdir(line)
+    let regex = '\[B\]\zs\(.*\)$'
+    let rtn = matchstr(a:line, regex)
+    return rtn
+endfunction
+
+function! s:ChangeSameSubDir(lnum)
+    let line = getline(a:lnum)
+    let dir = s:GetCommonSubdir(line)
+    let newline = substitute(line, '^.*' . s:DirDiffDiffSubDir . '\zs.*$', '', '') . ' [Same] ' . dir
+    setlocal modifiable
+    call setline(a:lnum, newline)
+    setlocal nomodifiable
+    setlocal nomodified
 endfunction
 
 function! <SID>DirDiffNext()
@@ -730,6 +793,11 @@ function! <SID>DirDiffSync() range
         let b:currentDiff = currLine
         call <SID>HighlightLine()
         let line = getline(currLine)
+        if line =~ s:DirDiffDiffSubDir
+          " skip common subdirectories
+          let currLine = currLine + 1
+          continue
+        endif
         if (!silence)
             let answer = confirm(substitute(line, "^....", '', ''). "\nSynchronization option:" , "&A -> B\n&B -> A\nA&lways A\nAl&ways B\n&Skip\nCa&ncel", 6)
             if (answer == 1 || answer == 3)
@@ -931,6 +999,11 @@ function! <SID>IsDiffer(line)
     return (match(a:line, "^ *" . s:DirDiffDifferLine . "\\|^==> " . s:DirDiffDifferLine  ) == 0)
 endfunction
 
+" The given line begins with the "Common subdirectories"
+function! s:IsSubDir(line)
+    return (match(a:line, "^ *" . s:DirDiffDiffSubDir . "\\|^==> " . s:DirDiffDiffSubDir  ) == 0)
+endfunction
+
 " Let you modify the Exclude patthern
 function! <SID>ChangeExcludes()
     let g:DirDiffExcludes = input ("Exclude pattern (separate multiple patterns with ','): ", g:DirDiffExcludes)
@@ -1011,7 +1084,7 @@ endfunc
 " Added to deal with internationalized version of diff, which returns a
 " different string than "Files ... differ" or "Only in ... "
 
-function! <SID>GetDiffStrings()
+function! <SID>GetDiffStrings(recursive)
     " Check if we have the dynamic text string turned on.  If not, just return
     " what's set in the global variables
 
@@ -1019,6 +1092,7 @@ function! <SID>GetDiffStrings()
         let s:DirDiffDiffOnlyLineCenter = g:DirDiffTextOnlyInCenter
         let s:DirDiffDiffOnlyLine = g:DirDiffTextOnlyIn
         let s:DirDiffDifferLine = g:DirDiffTextFiles
+        let s:DirDiffDiffSubDir = g:DirDiffTextSubDir
         let s:DirDiffDifferAndLine = g:DirDiffTextAnd
         let s:DirDiffDifferEndLine = g:DirDiffTextDiffer
         return
@@ -1036,7 +1110,11 @@ function! <SID>GetDiffStrings()
 	silent exe s:DirDiffMakeDirCmd . "\"" . tmp1 . "\""
 	silent exe s:DirDiffMakeDirCmd . "\"" . tmp2 . "\""
 	silent exe "!echo test > \"" . tmp1 . s:sep . "test" . "\""
-	silent exe "!" . g:DirDiffLangString . "diff -r --brief \"" . tmp1 . "\" \"" . tmp2 . "\" > \"" . tmpdiff . "\""
+  let arg_recursive = ''
+  if recursive
+    let arg_recursive = '-r'
+  endif
+	silent exe "!" . g:DirDiffLangString . "diff " . arg_recursive . " --brief \"" . tmp1 . "\" \"" . tmp2 . "\" > \"" . tmpdiff . "\""
 
 	" Now get the result of that diff cmd
 	silent exe "split ". tmpdiff
@@ -1054,7 +1132,7 @@ function! <SID>GetDiffStrings()
     "echo "Getting the diff in GetDiffStrings"
 
 	silent exe "!echo testdifferent > \"" . tmp2 . s:sep . "test" . "\""
-	silent exe "!" . g:DirDiffLangString . "diff -r --brief \"" . tmp1 . "\" \"" . tmp2 . "\" > \"" . tmpdiff . "\""
+	silent exe "!" . g:DirDiffLangString . "diff " . arg_recursive . " --brief \"" . tmp1 . "\" \"" . tmp2 . "\" > \"" . tmpdiff . "\""
 
 	silent exe "split ". tmpdiff
 	let s:DirDiffDifferLine = substitute( getline(1), tmp1rx . ".*$", "", '')
@@ -1084,6 +1162,7 @@ function! <SID>GetDiffStrings()
 	let g:DirDiffTextOnlyInCenter = s:DirDiffDiffOnlyLineCenter
 	let g:DirDiffTextOnlyIn = s:DirDiffDiffOnlyLine
 	let g:DirDiffTextFiles = s:DirDiffDifferLine
+  let g:DirDiffTextSubDir = s:DirDiffDiffSubDir
 	let g:DirDiffTextAnd = s:DirDiffDifferAndLine
 	let g:DirDiffTextDiffer = s:DirDiffDifferEndLine
 	let g:DirDiffDynamicDiffText = 0
