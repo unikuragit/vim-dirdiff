@@ -446,21 +446,33 @@ function <SID>ToggleHex()
 endfunction
 
 function! <SID>DirDiffHexmode()
-    wincmd k
+    let fileA = exists("t:FilenameA") ? t:FilenameA : ""
+    let fileB = exists("t:FilenameB") ? t:FilenameB : ""
+    if fileA == '' || fileB == ''
+        return
+    endif
+
+    call <SID>Drop(fileA)
     call <SID>ToggleHex()
-    wincmd l
+    call <SID>Drop(fileB)
     call <SID>ToggleHex()
     " Go back to the diff window
-    wincmd j
+    call <SID>Drop(t:FilenameDiffWindow)
 endfunction
 
 function! <SID>DirDiffWrapmode()
-    wincmd k
+    let fileA = exists("t:FilenameA") ? t:FilenameA : ""
+    let fileB = exists("t:FilenameB") ? t:FilenameB : ""
+    if fileA == '' || fileB == ''
+        return
+    endif
+
+    call <SID>Drop(fileA)
     setlocal wrap!
-    wincmd l
+    call <SID>Drop(fileB)
     setlocal wrap!
     " Go back to the diff window
-    wincmd j
+    call <SID>Drop(t:FilenameDiffWindow)
 endfunction
 
 function! <SID>EscapeFileName(path)
