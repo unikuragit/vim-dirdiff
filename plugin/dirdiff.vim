@@ -256,7 +256,7 @@ function! <SID>DirDiff(srcA, srcB, ...)
 
     echo "Diffing directories, it may take a while..."
     let error = <SID>DirDiffExec(cmd, 0)
-    if (error == 0)
+    if recursive && (error == 0)
         " TODO
         if tabopen
           tabclose
@@ -456,6 +456,9 @@ function! <SID>DirDiffHexmode()
     call <SID>ToggleHex()
     call <SID>Drop(fileB)
     call <SID>ToggleHex()
+    if !exists('t:FilenameDiffWindow')
+      return
+    endif
     " Go back to the diff window
     call <SID>Drop(t:FilenameDiffWindow)
 endfunction
@@ -471,6 +474,9 @@ function! <SID>DirDiffWrapmode()
     setlocal wrap!
     call <SID>Drop(fileB)
     setlocal wrap!
+    if !exists('t:FilenameDiffWindow')
+      return
+    endif
     " Go back to the diff window
     call <SID>Drop(t:FilenameDiffWindow)
 endfunction
@@ -504,6 +510,9 @@ function! <SID>Drop(fname)
 endfunction
 
 function! <SID>GotoDiffWindow()
+    if !exists('t:FilenameDiffWindow')
+      return
+    endif
     call <SID>Drop(t:FilenameDiffWindow)
 endfunction
 
