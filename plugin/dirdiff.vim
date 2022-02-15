@@ -332,10 +332,17 @@ function! <SID>DirDiff(srcA, srcB, ...)
     nnoremap <buffer> o    :call <SID>DirDiffOpen()<CR>
     nnoremap <buffer> <CR>  :call <SID>DirDiffOpen()<CR>
     nnoremap <buffer> <2-Leftmouse> :call <SID>DirDiffOpen()<CR>
+    command! -buffer DirDiffInfoFix call s:dirdiff_info_fix()
     call <SID>SetupSyntax()
 
     " Open the first diff
     call <SID>DirDiffNext()
+endfunction
+
+function! s:dirdiff_info_fix()
+  unlet t:FilenameA
+  unlet t:FilenameB
+  unlet t:LastMode
 endfunction
 
 " Set up syntax highlighing for the diff window
@@ -501,6 +508,7 @@ function! <SID>Drop(fname)
     " We need to replace the :drop implementation due to this issue:
     " https://github.com/vim/vim/issues/1503.  Thus if wideignore is set the
     " command would no work.  This is intended to work around that issue
+    " TODO Not return windows-id, when opening directory on Netrw.
     let winid = bufwinid(a:fname)
     if winid > 0
         call win_gotoid(winid)
@@ -564,7 +572,9 @@ function! <SID>DirDiffOpen()
                 let previousFile = (t:LastMode == "A") ? previousFileA : previousFileB
                 call <SID>Drop(previousFile)
                 silent exec "edit ".fileToOpen
-                silent exec "bd ".bufnr(previousFile)
+                if fileToOpen != previousFile
+                    silent exec "bd ".bufnr(previousFile)
+                endif
             endif
         else
             silent exec "split ".fileToOpen
@@ -584,17 +594,23 @@ function! <SID>DirDiffOpen()
                 call <SID>Drop(previousFileA)
                 silent exec "edit ".t:FilenameA
                 diffthis
-                silent exec "bd ".bufnr(previousFileA)
+                if previousFileA != t:FilenameA
+                    silent exec "bd ".bufnr(previousFileA)
+                endif
 
                 call <SID>Drop(previousFileB)
                 silent exec "edit ".t:FilenameB
                 diffthis
-                silent exec "bd ".bufnr(previousFileB)
+                if previousFileB != t:FilenameB
+                    silent exec "bd ".bufnr(previousFileB)
+                endif
             else
                 let previousFile = (t:LastMode == "A") ? previousFileA : previousFileB
                 call <SID>Drop(previousFile)
                 silent exec "edit ".t:FilenameB
-                silent exec "bd ".bufnr(previousFile)
+                if previousFile != t:FilenameB
+                    silent exec "bd ".bufnr(previousFile)
+                endif
                 diffthis
 
                 " To ensure that A is on the left and B on the right, splitright must be off
@@ -617,6 +633,9 @@ function! <SID>DirDiffOpen()
         exe ("normal z.")
         let t:LastMode = 2
     elseif s:IsSubDir(line)
+        let t:FilenameA = previousFileA
+        let t:FilenameB = previousFileB
+
         let common_dir = s:GetCommonSubdir(line)
         if common_dir == ""
             return
