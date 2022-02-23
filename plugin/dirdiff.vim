@@ -140,6 +140,7 @@ endif
 let s:DirDiffFirstDiffLine = 6
 let s:DirDiffALine = 1
 let s:DirDiffBLine = 2
+let s:DirDiffRecurcive = 1
 
 " -- Variables used in various utilities
 if has("unix")
@@ -193,12 +194,11 @@ endif
 
 
 function! <SID>DirDiff(srcA, srcB, ...)
-    let recursive = 1
     let tabopen = 0
     if a:0 > 0
       for arg in a:000
         if arg == '--no-rec'
-          let recursive = 0
+          let s:DirDiffRecurcive = 0
         elseif arg == '--tabnew'
           let tabopen = 1
         endif
@@ -214,7 +214,7 @@ function! <SID>DirDiff(srcA, srcB, ...)
     let DirDiffAbsSrcA = fnamemodify(expand(a:srcA, ":p"), ":p")
     let DirDiffAbsSrcB = fnamemodify(expand(a:srcB, ":p"), ":p")
     " Check for an internationalized version of diff ?
-    call <SID>GetDiffStrings(recursive)
+    call <SID>GetDiffStrings()
 
     " Remove the trailing \ or /
     let DirDiffAbsSrcA = substitute(DirDiffAbsSrcA, '\\$\|/$', '', '')
@@ -226,7 +226,7 @@ function! <SID>DirDiff(srcA, srcB, ...)
     let langStr = ""
     let cmd = "!" . g:DirDiffLangString . "diff"
     let cmdarg = ''
-    if recursive
+    if s:DirDiffRecurcive
       let cmdarg = cmdarg . " -r"
     endif
     let cmdarg = cmdarg . " --brief"
@@ -256,7 +256,7 @@ function! <SID>DirDiff(srcA, srcB, ...)
 
     echo "Diffing directories, it may take a while..."
     let error = <SID>DirDiffExec(cmd, 0)
-    if recursive && (error == 0)
+    if s:DirDiffRecurcive && (error == 0)
         " TODO
         if tabopen
           tabclose
@@ -300,7 +300,7 @@ function! <SID>DirDiff(srcA, srcB, ...)
     else
         call append(2, "Usage:   <Enter>/'o'=open,'s'=sync,'q'=quit")
     endif
-    call append(3, "Options: 'u'=update,'x'=set excludes,'i'=set ignore,'a'=set args, 'h'=hex mode, 'w'=wrap mode")
+    call append(3, "Options: 'u'=update,'x'=set excludes,'i'=set ignore,'a'=set args, 'h'=hex mode, 'w'=wrap mode, 'R'=toggle directory recurcive")
     call append(4, "Diff Args:" . cmdarg)
     call append(5, "")
     " go to the beginning of the file
@@ -327,6 +327,7 @@ function! <SID>DirDiff(srcA, srcB, ...)
     nnoremap <buffer> i :call <SID>ChangeIgnore()<CR>
     nnoremap <buffer> h :call <SID>DirDiffHexmode()<CR>
     nnoremap <buffer> w :call <SID>DirDiffWrapmode()<CR>
+    nnoremap <buffer> R :call <SID>DirDiffToggleRecursive()<CR>
     nnoremap <buffer> q :call <SID>DirDiffQuit()<CR>
 
     nnoremap <buffer> o    :call <SID>DirDiffOpen()<CR>
@@ -373,6 +374,15 @@ function! <SID>DirDiffUpdate()
     let dirA = <SID>GetBaseDir("A")
     let dirB = <SID>GetBaseDir("B")
     call <SID>DirDiff(dirA, dirB)
+endfun
+
+function! <SID>DirDiffToggleRecursive()
+    let s:DirDiffRecurcive = !s:DirDiffRecurcive
+    if s:DirDiffRecurcive == 0
+      echo 'Non recurcive directory diff.'
+    else
+      echo 'Recurcive directory diff.'
+    endif
 endfun
 
 " Quit the DirDiff mode
@@ -1124,7 +1134,7 @@ endfunc
 " Added to deal with internationalized version of diff, which returns a
 " different string than "Files ... differ" or "Only in ... "
 
-function! <SID>GetDiffStrings(recursive)
+function! <SID>GetDiffStrings()
     " Check if we have the dynamic text string turned on.  If not, just return
     " what's set in the global variables
 
@@ -1151,7 +1161,7 @@ function! <SID>GetDiffStrings(recursive)
 	silent exe s:DirDiffMakeDirCmd . "\"" . tmp2 . "\""
 	silent exe "!echo test > \"" . tmp1 . s:sep . "test" . "\""
   let arg_recursive = ''
-  if recursive
+  if s:DirDiffRecurcive
     let arg_recursive = '-r'
   endif
 	silent exe "!" . g:DirDiffLangString . "diff " . arg_recursive . " --brief \"" . tmp1 . "\" \"" . tmp2 . "\" > \"" . tmpdiff . "\""
