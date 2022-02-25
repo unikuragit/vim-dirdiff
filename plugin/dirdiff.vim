@@ -8,7 +8,7 @@ endif
 let g:loaded_dirdiff = 1
 
 " Public Interface:
-command! -nargs=* -complete=dir DirDiff call <SID>DirDiff (<f-args>)
+command! -nargs=* -complete=dir DirDiff let s:DirDiffRecurcive = 1<BAR>call <SID>DirDiff (<f-args>)
 command! -nargs=* -complete=dir DirDiffNoRecursive call <SID>DirDiff (<f-args>, '--no-rec')
 command! -nargs=0 DirDiffOpen call <SID>DirDiffOpen ()
 command! -nargs=0 DirDiffNext call <SID>DirDiffNext ()
