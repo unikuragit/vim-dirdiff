@@ -969,6 +969,7 @@ endfunction
 " interactive flag ([0|1]).  Returns the v:shell_error after
 " executing the command.
 function! <SID>DirDiffExec(cmd, interactive)
+    let l:cmd = escape(a:cmd, '#%')
     let error = 0
     " On Unix, if we use a different shell other than bash, we can cause
     " problem
@@ -977,10 +978,10 @@ function! <SID>DirDiffExec(cmd, interactive)
         let &shell = g:DirDiffForceShell
     endif
     if (a:interactive)
-        exe (a:cmd)
+        exe (l:cmd)
         let error = v:shell_error
     else
-        silent exe (a:cmd)
+        silent exe (l:cmd)
         let error = v:shell_error
     endif
     if g:DirDiffForceShell != ""
